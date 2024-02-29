@@ -97,42 +97,72 @@ contract SkillMarket {
 
 
     function addService(
-        string calldata _serviceId,
-        string calldata _serviceName,
-        string calldata _serviceDescription,
-        uint _servicePrice
-    ) public {
-        require(bytes(_serviceName).length > 0, "Service Name should not be empty");
-        require(bytes(_serviceDescription).length > 0, "Service Description should not be empty");
-        //require(!serviceIdentifier[_serviceId], "A service with this ID already exists");
+    string calldata _serviceId,
+    string calldata _serviceName,
+    string calldata _serviceDescription,
+    uint _servicePrice
+) public {
+    require(bytes(_serviceName).length > 0, "Service Name should not be empty");
+    require(bytes(_serviceDescription).length > 0, "Service Description should not be empty");
+    
+    // Check if service ID already exists
+    require(!serviceIdentifier[_serviceId], "A service with this ID already exists");
 
-        services[numberOfServicesAvailable] = Service(
-            payable(msg.sender),
-            _serviceId,
-            _serviceName,
-            _serviceDescription,
-            _servicePrice,
-            0, //service reputation
-            0 //total number of clients
-        );
-        serviceIdentifier[_serviceId] = true;
-        exists[numberOfServicesAvailable] = true;
-        numberOfServicesAvailable++;
+    // Ensure service ID is not empty
+    require(bytes(_serviceId).length > 0, "Service ID should not be empty");
 
-    }
+    // Ensure service price is greater than zero
+    require(_servicePrice > 0, "Service Price should be greater than zero");
+
+    // Add service
+    services[numberOfServicesAvailable] = Service(
+        payable(msg.sender),
+        _serviceId,
+        _serviceName,
+        _serviceDescription,
+        _servicePrice,
+        0, // Service reputation
+        0  // Total number of clients
+    );
+
+    // Mark service ID as existing
+    serviceIdentifier[_serviceId] = true;
+
+    // Mark service as existing
+    exists[numberOfServicesAvailable] = true;
+
+    // Increment number of services available
+    numberOfServicesAvailable++;
+}
+
 
     function viewService(uint _index) public view exist(_index) returns (Service memory){
         return (services[_index]);
     }
 
     function purchaseService(uint _index) external payable exist(_index) {
-        //Service storage selectedService = services[_index];
-        require(services[_index].provider != msg.sender, "You cannot purchase your own services");
-        //require(msg.value >= selectedService.servicePrice, "Insufficient funds");
-        require(IERC20Token(cUsdTokenAddress).transferFrom(msg.sender, services[_index].provider, services[_index].servicePrice), "Transfer unsuccessful");
-        services[_index].totalNumberOfClients++;
-        services[_index].serviceReputation += 2;
-    }
+    // Ensure the sender is not the service provider
+    require(services[_index].provider != msg.sender, "You cannot purchase your own services");
+
+    // Get the selected service
+    Service storage selectedService = services[_index];
+
+    // Ensure the sender has sufficient balance
+    require(msg.value >= selectedService.servicePrice, "Insufficient funds");
+
+    // Ensure the transfer is successful
+    require(IERC20Token(cUsdTokenAddress).transferFrom(msg.sender, selectedService.provider, selectedService.servicePrice), "Transfer unsuccessful");
+
+    // Increment total number of clients for the service
+    selectedService.totalNumberOfClients++;
+
+    // Increment service reputation
+    selectedService.serviceReputation += 2;
+
+    // Emit event for service purchase
+    emit ServicePurchased(msg.sender, selectedService.provider, selectedService.serviceId, selectedService.servicePrice);
+}
+
 
 
     function viewReputation(uint _index) public view exist(_index) returns(uint) {
@@ -143,17 +173,32 @@ contract SkillMarket {
         return (numberOfServicesAvailable);
     }
 
-    function removeService(uint _index) public exist(_index) onlyServiceProvider(_index) {
-        serviceIdentifier[services[_index].serviceId] = false;
-        delete services[_index];
-        exists[_index] = false;
-        numberOfServicesAvailable--;
-    }
+    function removeService(uint _index) public exist(_index) {
+    // Ensure only the service provider can remove their own services
+    require(services[_index].provider == msg.sender, "Only the service provider can remove the service");
 
-    function updateService(uint _index, uint _price, string calldata _description) public exist(_index) onlyServiceProvider(_index) {
-        Service storage currentService = services[_index];
-        currentService.servicePrice = _price;
-        currentService.serviceDescription = _description;
+    // Mark service as no longer existing
+    exists[_index] = false;
 
-    }   
+    // Emit event for service removal
+    emit ServiceRemoved(_index);
+}
+
+function updateService(uint _index, uint _price, string calldata _description) public exist(_index) onlyServiceProvider(_index) {
+    // Ensure the new service price is greater than zero
+    require(_price > 0, "Service Price should be greater than zero");
+
+    // Ensure the new service description is not empty
+    require(bytes(_description).length > 0, "Service Description should not be empty");
+
+    // Update service attributes
+    Service storage currentService = services[_index];
+    currentService.servicePrice = _price;
+    currentService.serviceDescription = _description;
+
+    // Emit event for service update
+    emit ServiceUpdated(_index, _price, _description);
+}
+
+
 }
